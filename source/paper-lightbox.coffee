@@ -8,309 +8,342 @@ Polymer
 	listeners:
 		'iron-resize': '_onResize'
 
-	_createPopup: ->
+	# -----------------
+	# --- all get fn
+	# -----------------
+	_get_typology: ->
 		# set vars
-		module = this
-		if module.getAttribute('closingTime') != null && module.getAttribute('openingTime') != undefined
-			openingTime = module.getAttribute('openingTime')
+		component = this
+
+		# get lightbox typology
+		type = component.getAttribute 'type'
+
+		return type
+
+	_get_attribute: (el, attr) ->
+		return el.getAttribute(attr)
+
+	_get_class: (el, value) ->
+		return el.classList.contains value
+
+	_get_imageRatio: (width, height) ->
+		# check image format
+		if width > height
+			format = 'landscape'
+		else
+			format = 'portrait'
+
+		return format
+
+	# -----------------
+	# --- all set fn
+	# -----------------
+	_set_typology: ->
+		# set vars
+		component = this
+		type = @_get_typology()
+
+		# check different lightbox typology
+		component.listen component.$$('button'), 'tap', '_create_' + type
+
+	_set_bodyFidex: (type)->
+		if type != null && type != undefined
+			document.body.setAttribute("style", "overflow: hidden;")
+		else
+			document.body.removeAttribute('style')
+
+	_set_attribute: (el, attr, value) ->
+		el.setAttribute attr, value
+
+	_set_class: (el, value) ->
+		el.className += ' ' + value
+
+	_set_style: (el, prop, value) ->
+		el.style[prop] = value
+
+	_setAjaxRequest: (page)->
+		# set vars
+		component = this
+		xmlhttp = new XMLHttpRequest()
+
+		xmlhttp.onreadystatechange = ->
+			if xmlhttp.readyState == 4
+
+				# status ok
+				if xmlhttp.status == 200
+					# call fn to build main structure
+					component._create_popup('', component._create_element('div', 'paper-lightbox-popup_ajaxWrap','', xmlhttp.responseText))
+
+				# status 'not found'
+				else if xmlhttp.status == 400
+					# call fn to build main structure
+					component._create_popup('', component._create_element('div', 'paper-lightbox-popup_ajaxWrap','', 'Page not found'))
+
+				# status 'error'
+				else
+					# call fn to build main structure
+					component._create_popup('', component._create_element('div', 'paper-lightbox-popup_ajaxWrap','', 'Page error'))
+			return
+
+		xmlhttp.open("GET", page);
+		xmlhttp.send();
+
+		return xmlhttp
+
+	_set_customEvents: ->
+		# set vars
+		component = this
+		events = ['onBeforeLoad', 'onAfterLoad', 'onBeforeClose', 'onAfterClose']
+
+		# create loop to define events
+		for event, index in events
+			component[index] = undefined
+
+			# create custom event
+			if document.createEvent
+				component[events[index]] = document.createEvent("HTMLEvents")
+				component[events[index]].initEvent(events[index], true, true)
+			else
+				component.events[index] = document.createEventObject()
+				component.events[index].eventType = events[index]
+
+	_set_fireCustomEvents: (customEvent) ->
+		# set vars
+		component = @
+
+		# fire custom event
+		if document.createEvent
+			component.dispatchEvent(component[customEvent])
+		else
+			component.fireEvent("on" + component[customEvent].eventType, component[customEvent])
+
+	# -----------------
+	# --- all create fn
+	# -----------------
+	_create_popup: (type, content) ->
+		# fire event before load
+		@_set_fireCustomEvents('onBeforeLoad')
+
+		# set vars
+		component = this
+
+		# build overlay
+		@_create_overlay()
+
+		# set delay
+		if @_get_attribute(component, 'openingTime') != null && @_get_attribute(component, 'openingTime') != undefined
+			openingTime = @_get_attribute(component, 'openingTime')
 		else
 			openingTime = 0
 
-		# create container
-		container = document.createElement 'div'
-		container.classList.add 'paper-lightbox-popup'
+		# build container
+		container = @_create_element('div', 'paper-lightbox-popup opening')
 
-		# opening animation
-		container.classList.add('opening')
+		# add listener
+		@_addListen(container, '_remove')
+
+		# remove class opening
 		setTimeout (->
 			container.classList.remove('opening')
 		), openingTime
 
-		# create close button
-		close = document.createElement 'iron-icon'
-		close.classList.add 'paper-lightbox-popup_close'
-		close.setAttribute 'icon', 'icons:close'
+		# build close bt
+		close = @_create_element('iron-icon', 'paper-lightbox-popup_close', [['icon', 'icons:close']])
 
-		# create window
-		module.window = document.createElement 'div'
-		module.window.classList.add 'paper-lightbox-popup_window'
-		module.window.appendChild close
-		container.appendChild module.window
+		# add listener
+		@_addListen(close, '_remove')
 
-		# create overlay
-		overlay = document.createElement 'div'
-		overlay.classList.add 'paper-lightbox-popup_overlay'
-		container.appendChild overlay
+		# build window
+		component.window = @_create_element('div', 'paper-lightbox-popup_window paper-lightbox-popup_window-' + type)
 
-		# container.innerHTML = module.ajaxResponse
-		module.appendChild container
+		# append fn
+		component.window.appendChild close
+		component.window.appendChild content
+		container.appendChild component.window
+		component.appendChild container
 
-	_getImageRatio: (width, height) ->
-		module = this
+		# fixed body
+		@_set_bodyFidex('fixed')
 
-		if width > height
-			module.window.classList.add 'landscape'
-		else
-			module.window.classList.add 'portrait'
+		# fire event after load
+		@_set_fireCustomEvents('onAfterLoad')
 
-	_isAjax: ->
+
+	_create_overlay: ->
 		# set vars
-		module = this
+		component = this
 
-		if @_getType() == 'ajax'
-			return true
+		# create element
+		overlay = @_create_element('div', 'paper-lightbox-popup_overlay')
+		component.appendChild overlay
 
-	_parseAjax: (content) ->
+		# add listener
+		@_addListen(overlay, '_remove')
+
+	_create_element: (tag, style, attr, content) ->
+		elem = document.createElement tag
+		elem.setAttribute 'class', style
+
+		# set attribute
+		if attr != null && attr != undefined
+			for arr, index in attr
+				elem.setAttribute attr[index][0], attr[index][1]
+
+		# set innerHTML
+		if content != null && content != undefined
+			elem.innerHTML = content
+
+		return elem
+
+	# 1. ajax
+	_create_ajax: ->
 		# set vars
-		module = this
-		capsule = document.createElement 'div'
-		capsule.innerHTML = content
+		content = this
+		url = @_get_attribute(content, 'src')
 
-		[].forEach.call capsule.children, (val, key) ->
-			module.window.appendChild val
+		@_setAjaxRequest(url)
 
-	_ajaxResponse: (data) ->
+	# 2. image
+	_create_image: ->
 		# set vars
-		module = this
-
-		# save response
-		module.ajaxResponse = data.target.lastResponse
-
-	_createAjax: ->
-		# set vars
-		module = this
-
-		# fire event before open
-		@_fireCustomEvents('onBeforeOpen')
-
-		# create popup and parse content
-		@_createPopup()
-		@_parseAjax(module.ajaxResponse)
-
-		# add type class
-		module.window.classList.add 'paper-lightbox-popup_window-ajax'
-
-		# fire event after open
-		@_fireCustomEvents('onAfterOpen')
-
-		# close popup event
-		@_closePopup()
-
-	_createImage: ->
-		# set vars
-		module = this
+		component = this
 		image = new Image()
-
-		# fire event before open
-		@_fireCustomEvents('onBeforeOpen')
 
 		# create image
 		image.onload = ->
+			# get image format
+			format = component._get_imageRatio(image.naturalWidth, image.naturalHeight)
 
-			# create popup and parse content
-			module._createPopup()
-			module._getImageRatio(image.naturalWidth, image.naturalHeight)
-
-			# add type class
-			module.window.classList.add 'paper-lightbox-popup_window-image'
-
-			# append image after is loaded
-			module.window.appendChild image
+			# call fn to build main structure
+			component._create_popup('image' + ' ' + format, image)
 
 			# fire resize event
-			module._onResize()
+			component._onResize()
 
-			# fire event after open
-			module._fireCustomEvents('onAfterOpen')
+		image.src = @_get_attribute(component, 'src')
 
-			# close popup event
-			module._closePopup()
-
-		image.src = module.getAttribute 'src'
-
-	_createIframe: ->
+	# 3. inline
+	_create_inline: ->
 		# set vars
-		module = this
-		url = module.getAttribute 'src'
-		iframe = document.createElement('iframe')
-		newYtbUrl = url.replace('/watch?v=', '/embed/')
-		iframe.setAttribute 'frameborder', '0'
-		iframe.setAttribute 'allowfullscreen', ''
+		component = this
 
-		# fire event before open
-		@_fireCustomEvents('onBeforeOpen')
+		# get content to clone
+		inLineContent = document.querySelector @_get_attribute(component, 'src')
 
-		# create iframe wrapper
-		iframeWrapper = document.createElement('div')
-		iframeWrapper.classList.add 'paper-lightbox_iframeWrapper'
+		# set cloned el
+		content = inLineContent.cloneNode true
 
-		# if url is a youtube web
-		if url.indexOf('youtube.com/watch?v=') > -1
-			iframe.setAttribute 'src', newYtbUrl + '?autoplay=1'
+		# call fn to build main structure
+		@_create_popup('inline', content)
+
+
+	# 4. iframe
+	_create_iframe: ->
+		# set vars
+		component = this
+		path = @_get_attribute(component, 'src')
+		repPath = path.replace('/watch?v=', '/embed/')
+
+		# build iframe
+		iframe = @_create_element('iframe', '', [['frameborder', '0'],['allowfullscreen', '']])
+
+		# build iframe wrap
+		content = @_create_element('div', 'paper-lightbox_iframeWrapper')
+
+		# check path typology
+		if path.indexOf('youtube.com/watch?v=') > -1
+			@_set_attribute(iframe, 'src', repPath + '?autoplay=1')
 		else
-			iframe.setAttribute 'src', url + '?autoplay=1'
+			@_set_attribute(iframe, 'src', path + '?autoplay=1')
 
-		# create popup and parse content
-		@_createPopup()
+		# append fn
+		content.appendChild iframe
 
-		# add type class
-		module.window.classList.add 'paper-lightbox-popup_window-iframe'
+		# call fn to build main structure
+		component._create_popup('iframe', content)
 
-		# append iframe
-		setTimeout (->
-			iframeWrapper.appendChild iframe
-			module.window.appendChild iframeWrapper
-		), 100
 
-		# fire event after open
-		@_fireCustomEvents('onAfterOpen')
-
-		# close popup event
-		@_closePopup()
-
-	_createInline: ->
+	# -----------------
+	# --- all action fn
+	# -----------------
+	_addListen: (el, fn) ->
 		# set vars
-		module = this
-		content = document.querySelector module.getAttribute 'src'
+		component = this
 
-		# fire event before open
-		@_fireCustomEvents('onBeforeOpen')
+		# add overlay listener
+		component.listen el, 'tap', fn
 
-		# create popup and parse content
-		@_createPopup()
+	_remove: (e) ->
+		# fire event before close
+		@_set_fireCustomEvents('onBeforeClose')
 
-		# add type class
-		module.window.classList.add 'paper-lightbox-popup_window-inline'
-
-		# append cloned content
-		module.window.appendChild content.cloneNode true
-
-		# fire event after open
-		@_fireCustomEvents('onAfterOpen')
-
-		# close popup event
-		@_closePopup()
-
-	_getType: ->
 		# set vars
-		module = this
-
-		# get popup type
-		return module.getAttribute 'type'
-
-	_launchPopup: ->
-		# set vars
-		module = @
-
-		# launch each popup type
-		switch @_getType()
-			when 'ajax'
-				module.listen module.$$('button'), 'tap', '_createAjax'
-			when 'image'
-				module.listen module.$$('button'), 'tap', '_createImage'
-			when 'inline'
-				module.listen module.$$('button'), 'tap', '_createInline'
-			when 'iframe'
-				module.listen module.$$('button'), 'tap', '_createIframe'
-
-	_removePopup: ->
-		# set vars
-		module = this
-		popup = module.querySelector('.paper-lightbox-popup')
+		component = this
 		@window = undefined
-		if module.getAttribute('closingTime') != null && module.getAttribute('closingTime') != undefined
-			closingTime = module.getAttribute('closingTime')
+		popup = component.querySelector('.paper-lightbox-popup')
+		overlay = component.querySelector('.paper-lightbox-popup_overlay')
+		wrap = component.querySelector('.paper-lightbox-popup')
+		close = component.querySelector('.paper-lightbox-popup_close')
+
+		# set delay
+		if @_get_attribute(component, 'closingTime') != null && @_get_attribute(component, 'closingTime') != undefined
+			closingTime = @_get_attribute(component, 'closingTime')
 		else
 			closingTime = 0
 
-		# fire event before close
-		@_fireCustomEvents('onBeforeClose')
+		# add class 'closing'
+		@_set_class(popup, 'closing')
 
-		# remove animation
-		popup.classList.add('closing')
+		# set clicked target
+		target = e.target
+
+		# remove popup with delay
 		setTimeout (->
+			# check if target is == wrap or == close
+			if target == wrap || target == close
+				popup.remove()
+				overlay.remove()
 
-			# remove popup
-			popup.remove()
-
-			# fire event after close
-			module._fireCustomEvents('onAfterClose')
+				# fire event before close
+				component._set_fireCustomEvents('onAfterClose')
 
 		), closingTime
-		document.body.style.overflow = ''
 
-	_closePopup: ->
+		# remove fixed body
+		@_set_bodyFidex()
+
+	# -----------------
+	# --- all event fn
+	# -----------------
+	attached: ->
+
+	_onLoad: ->
+		# define typology
+		@_set_typology()
+
+	ready: ->
 		# set vars
-		module = this
-		overlay = module.querySelector('.paper-lightbox-popup_overlay')
-		close = module.querySelector('.paper-lightbox-popup_close')
+		component = this
 
-		# add overlay listener
-		module.listen overlay, 'tap', '_removePopup'
-		module.listen close, 'tap', '_removePopup'
+		@async(->
+			setTimeout (->
+				component._onLoad()
+				component._set_customEvents()
+			), 0
+		)
 
 	_onResize: ->
 		# if popup is open
 		if @window
 
 			# if image has portrait ratio
-			if @window.classList.contains 'portrait'
+			if @_get_class(@window, 'portrait')
+				# set vars
 				image = @window.querySelector('img')
 
-				# limits image height
-				image.style.maxHeight = (window.innerHeight * 0.8) + 'px'
-
-	ready: ->
-		module = @
-
-		@async(->
-			setTimeout (->
-				module._onLoad()
-				module._defineCustomEvents()
-			), 0
-		)
-
-	_onLoad: ->
-		@_launchPopup()
-
-	_defineCustomEvents: ->
-		# define var
-		module = @
-		events = ['onBeforeOpen', 'onAfterOpen', 'onBeforeClose', 'onAfterClose']
-		eventsLenght = events.length
-
-		# loop to define events
-		[].forEach.call events, (e) ->
-			module[e] = undefined
-
-			# create custom event
-			if document.createEvent
-				module[e] = document.createEvent('HTMLEvents')
-				module[e].initEvent(e.toLowerCase(), true, true)
-			else
-				module.e = document.createEventObject()
-				module.e.eventType = e.toLowerCase()
-
-			module[e].eventName = e.toLowerCase()
-
-	_fireCustomEvents: (customEvent) ->
-		# define var
-		module = @
-
-		if document.createEvent
-			module.dispatchEvent(module[customEvent])
-		else
-			module.fireEvent('on' + module[customEvent].eventType, module[customEvent])
+				# set max height
+				@_set_style(image, 'maxHeight', (window.innerHeight * 0.8) + 'px')
 
 	open: ->
-		module = @
-
-		switch @_getType()
-			when 'ajax'
-				@_createAjax()
-			when 'image'
-				@_createImage()
-			when 'inline'
-				@_createInline()
-			when 'iframe'
-				@_createIframe()
+		fn = '_create_' + @_get_typology()
+		@[fn]()
